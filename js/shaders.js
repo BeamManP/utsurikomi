@@ -54,8 +54,10 @@ uniform bool uHasWallTex;
 uniform float uWallTexAspect;
 
 // 写り込み
-uniform vec2 uReflCenter;
-uniform vec2 uReflHalf;
+uniform vec2 uReflAnchor;     // 写り込みの絵の「スマホ」が来る位置（世界座標。撮影者はカメラの所にいる）
+uniform vec2 uReflSize;       // 絵の板の幅・高さ（世界の単位）
+uniform float uReflDepth;     // 絵の板がカメラよりどれだけ後ろにあるか
+uniform vec2 uReflPhone;      // 絵の中でスマホがある位置（左下 0,0）
 uniform float uReflFlip;
 uniform float uReflStr;
 uniform float uReflBlur;
@@ -247,9 +249,14 @@ void main() {
     float fr = 0.04 + 0.96 * pow(1.0 - ct, 5.0);
     float k = uReflStr * (0.85 + 3.0 * fr);
     if (uHasRefl) {
-      vec2 rq = (qd - uReflCenter) / uReflHalf;
-      rq.x *= uReflFlip;
-      vec2 ruv = rq * 0.5 + 0.5;
+      // 画面は平らな鏡。カメラからの線を画面で跳ね返し、撮影者の後ろにある「人と部屋の絵の板」に当てる。
+      // 絵はモニター側から部屋を見た構図なので、絵の右 = 世界の −x
+      vec3 dir = normalize(P - uCam);
+      vec3 rd = vec3(dir.xy, -dir.z);
+      float tt = (uCam.z + uReflDepth) / max(rd.z, 1e-4);
+      vec2 hit = P.xy + rd.xy * tt;
+      vec2 rel = (hit - uReflAnchor) / uReflSize;
+      vec2 ruv = vec2(uReflPhone.x - rel.x * uReflFlip, uReflPhone.y + rel.y);
       vec2 e = smoothstep(vec2(0.0), vec2(0.06), ruv) * smoothstep(vec2(0.0), vec2(0.06), 1.0 - ruv);
       vec3 rc = texture(uRefl, clamp(ruv, 0.0, 1.0), uReflBlur).rgb * e.x * e.y;
       col += rc * k * glass;

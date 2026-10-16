@@ -5,6 +5,8 @@ import { defaults, buildPanel, isContentKey, TABS } from './controls.js';
 import { detectLang, makeT } from './i18n.js';
 
 const PRESETS = ['ojisan', 'bakemono', 'bijo', 'anime', 'cat', 'yurei', 'samurai', 'alien'];
+// プリセットの絵でスマホが写っている位置（左下 0,0）。カメラの真後ろに来るよう合わせる
+const PHONE_POS = [0.5, 0.4];
 const LONG_SIDE = 2048;
 
 const $ = (sel) => document.querySelector(sel);
@@ -173,14 +175,11 @@ function render() {
   const matte = s.glass === 'matte';
   const reflAspect = renderer.reflAspect;
   // 写り込んだ人は「カメラ→画面→人」で 2 倍の距離にいる
-  const halfH = (cam.F * (s.reflScale * 2.6)) / (2 * cam.D);
-  const reflHalf = [halfH * reflAspect, halfH];
-  // 物理どおりなら「鏡に自分が写る点」にスマホが来るが、それだと角度を付けた時に顔が画面の外へ逃げる。
-  // 笑いどころは顔なので、追従を半分に弱め、絵を少し下げて顔を真ん中寄りに置く。
-  const reflCenter = [
-    cam.mirror[0] * 0.5 + s.reflX * 0.9,
-    cam.mirror[1] * 0.5 + s.reflY * 0.9 - halfH * 0.22,
-  ];
+  // 写り込みの絵の板：撮影者はカメラの位置にいて、絵の真ん中（スマホ）がカメラの真後ろに来る。
+  // 大きさは世界の単位（画面の高さ = 1）で、板は撮影者の顔あたりの奥行きに置く
+  const reflW = s.reflScale * 8;
+  const reflSize = [reflW, reflW / reflAspect];
+  const reflAnchor = [cam.cam[0] + s.reflX * 3, cam.cam[1] + s.reflY * 3];
 
   const frameIdx = { frameNone: 0, laptop: 1, monitor: 2 }[s.frame];
   const bz = BEZEL[s.bezel];
@@ -211,8 +210,10 @@ function render() {
     uWallScale: s.wallScale,
     // ぼけの円は「画面との奥行きの差 ÷ 画面までの距離」に比例する
     uWallBlurW: (s.wallBlur * 0.08 * s.wallDist) / cam.D,
-    uReflCenter: reflCenter,
-    uReflHalf: reflHalf,
+    uReflAnchor: reflAnchor,
+    uReflSize: reflSize,
+    uReflDepth: 1.5,
+    uReflPhone: s.refl === 'upload' ? [0.5, 0.5] : PHONE_POS,
     uReflFlip: s.reflFlip ? -1 : 1,
     uReflStr: matte ? s.reflStr * 0.55 : s.reflStr,
     uReflBlur: matte ? s.reflBlur + 2.5 : s.reflBlur,
@@ -336,16 +337,16 @@ $('#randomBtn').addEventListener('click', () => {
     refl: pick(PRESETS),
     reflStr: rnd(0.5, 1.0),
     reflBlur: rnd(0.8, 2.6),
-    reflScale: rnd(0.5, 0.8),
+    reflScale: rnd(0.8, 1.3),
     reflX: rnd(-0.15, 0.15),
     reflY: rnd(-0.15, 0.1),
     glass: Math.random() < 0.8 ? 'glossy' : 'matte',
     glare: rnd(0, 0.35),
     glareX: rnd(-1, 1),
     glareY: rnd(0.2, 0.9),
-    yaw: rnd(-22, 22),
-    pitch: rnd(-12, 12),
-    roll: rnd(-6, 6),
+    yaw: rnd(-12, 12),
+    pitch: rnd(-8, 8),
+    roll: rnd(-4, 4),
     zoom: rnd(0.95, 1.6),
     shiftX: rnd(-0.15, 0.15),
     shiftY: rnd(-0.12, 0.12),

@@ -1,3 +1,5 @@
 # imgen の元画像（大きいので載せない。公開用は reflections/ に縮小済み）
 gen/raw/
 gen/contact.jpg
+gen/raw_wide/
+gen/contact_wide.jpg
