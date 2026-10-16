@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>UTSURIKOMI</title>
+  <meta name="description" content="画像を「PC画面をスマホで撮った写真」にするジェネレーター。モアレ・斜めの角度・ガラスへの写り込みを再現。/ Turn any image into a phone photo of a PC screen, reflection included.">
+  <meta name="theme-color" content="#0b0c0f">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://beammanp.github.io/utsurikomi/">
+  <meta property="og:title" content="UTSURIKOMI — 写り込むのは、誰？">
+  <meta property="og:description" content="画像を「PC画面をスマホで撮った写真」にするジェネレーター。斜めの角度・モアレ・ガラスへの写り込みまで再現。/ Turn any image into a phone photo of a PC screen — reflection included.">
+  <meta property="og:image" content="https://beammanp.github.io/utsurikomi/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='12' width='52' height='34' rx='4' fill='%2315171d' stroke='%23e9e6df' stroke-width='3'/%3E%3Ccircle cx='32' cy='29' r='9' fill='none' stroke='%23ff5a3c' stroke-width='3'/%3E%3Crect x='22' y='50' width='20' height='4' rx='2' fill='%23e9e6df'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="rec" aria-hidden="true"></span>
+      <h1>UTSURIKOMI</h1>
+    </div>
+    <p class="tagline" data-i18n="app.tagline"></p>
+    <button id="langBtn" class="ghost lang" type="button">EN</button>
+  </header>
+
+  <main class="app">
+    <div class="viewer">
+      <div id="stage" class="stage">
+        <canvas id="view" aria-label="preview"></canvas>
+        <div class="drop-hint" data-i18n="drop.hint"></div>
+        <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+      </div>
+      <div class="actions">
+        <button id="openBtn" class="pill" type="button"><span class="ico" aria-hidden="true">▣</span><span data-i18n="btn.open"></span></button>
+        <button id="saveBtn" class="shutter" type="button"><span class="shutter-ring" aria-hidden="true"></span><span class="shutter-label" data-i18n="btn.save"></span></button>
+        <button id="randomBtn" class="pill" type="button"><span class="ico" aria-hidden="true">⚄</span><span data-i18n="btn.random"></span></button>
+      </div>
+      <div class="sub-actions">
+        <button id="shareBtn" class="ghost" type="button" hidden data-i18n="btn.share"></button>
+      </div>
+      <p class="privacy" data-i18n="privacy"></p>
+      <p id="fatal" class="fatal"></p>
+    </div>
+
+    <aside class="controls">
+      <nav id="tabs" class="tabs" role="tablist"></nav>
+      <div id="panel" class="panel"></div>
+      <div class="panel-foot">
+        <button id="resetBtn" class="ghost" type="button" data-i18n="btn.reset"></button>
+        <p class="credit" data-i18n="credit"></p>
+      </div>
+    </aside>
+  </main>
+
+  <input id="file" type="file" accept="image/*" hidden>
+  <input id="reflFile" type="file" accept="image/*" hidden>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
