@@ -70,6 +70,7 @@ export const TABS = [
       { key: 'wallScale', min: 0.3, max: 3, step: 0.01, def: 1 },
       { key: 'wallDist', min: 0.1, max: 4, step: 0.05, def: 1.2 },
       { key: 'wallBlur', min: 0, max: 3, step: 0.01, def: 1 },
+      { key: 'deskCol', type: 'color', def: '#4a3a2e' },
       { key: 'room', min: 0, max: 1, step: 0.01, def: 0.3 },
     ],
   },

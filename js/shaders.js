@@ -43,7 +43,10 @@ uniform vec3 uDeckCol;
 uniform float uRoom;          // 部屋の明るさ
 
 // 壁（画面より奥の平行な面）
-uniform mat3 uHinvWall;       // 画像座標 → 壁の世界座標 (x, y)
+uniform vec3 uCamR, uCamU, uCamF; // カメラの右・上・前
+uniform float uFcam;          // 焦点距離（長辺の半分 = 1）
+uniform float uWallDist;      // 画面から壁までの奥行き
+uniform vec3 uDeskCol;
 uniform int uWallPat;         // 0 無地 1 ストライプ 2 レンガ 3 木 4 コンクリート 5 水玉 6 タイル 7 画像
 uniform vec3 uWallCol;
 uniform vec3 uWallCol2;
@@ -81,9 +84,9 @@ float inside(float d) {
 }
 
 float h21(vec2 p) {
-  p = fract(p * vec2(233.34, 851.73));
-  p += dot(p, p + 23.45);
-  return fract(p.x * p.y);
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 float vn(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -153,6 +156,32 @@ vec3 wallColor(vec2 wp) {
   return acc / 12.0;
 }
 
+// 机の天板。画面の光が手前へ弱まりながら当たる
+vec3 deskShade(vec3 p, vec3 glow, float halfW) {
+  vec3 c = uDeskCol * (0.9 + 0.2 * vn(vec2(p.x * 1.5, p.z * 18.0)));
+  float spill = exp(-max(p.z, 0.0) * 0.8) * smoothstep(halfW + 1.2, halfW * 0.6, abs(p.x));
+  if (uFrame == 2) {                         // モニターの台座
+    vec2 e = vec2(p.x / 0.42, (p.z + 0.05) / 0.26);
+    if (dot(e, e) < 1.0) c = uBezelCol * 0.9;
+  }
+  return c * (uRoom + 0.55 * spill * glow);
+}
+
+// ノートPCのキーボード面。p = (x, 蝶番からの奥行き)
+vec3 deckShade(vec2 p, vec3 glow) {
+  vec3 c = uDeckCol;
+  vec2 kb = vec2(p.x / (uA * 0.82) + 0.5, (p.y - 0.09) / 0.4);
+  if (kb.x > 0.0 && kb.x < 1.0 && kb.y > 0.0 && kb.y < 1.0) {
+    vec2 g = fract(kb * vec2(15.0, 6.0));
+    float key = step(0.09, g.x) * step(g.x, 0.91) * step(0.12, g.y) * step(g.y, 0.88);
+    c = mix(c * 0.45, c * 1.2 + 0.012, key);
+  }
+  vec2 tp = vec2(p.x / (uA * 0.33), (p.y - 0.58) / 0.32);
+  if (abs(tp.x) < 0.5 && tp.y > 0.0 && tp.y < 1.0) c = c * 1.15 + 0.01;
+  float spill = exp(-p.y * 1.6);
+  return c * (uRoom + 0.9 * spill * glow);
+}
+
 void main() {
   vec2 qd = (vUv * 2.0 - 1.0) * uQScale;            // ゆがんだ後の画像座標
   float r2 = dot(qd, qd);
@@ -163,27 +192,48 @@ void main() {
   bool front = w.z > 0.0;
   vec3 P = vec3(uA * (uv.x - 0.5), 0.5 - uv.y, 0.0); // 画面の平面上の点
 
-  // ---- 背景（モニターの奥の壁）
-  vec3 ww = uHinvWall * vec3(q, 1.0);
-  vec2 wp = ww.xy / ww.z;
-  vec3 col = wallColor(wp) * uRoom * mix(0.6, 1.15, vUv.y);
-
-  // ---- 枠
+  // ---- 枠の寸法
   float side = uBezelM.x, top = uBezelM.y, bot = uBezelM.z, rad = uBezelM.w;
   vec2 outerC = vec2(0.0, (top - bot) * 0.5);
   vec2 outerB = vec2(uA * 0.5 + side, 0.5 + (top + bot) * 0.5);
   float dOuter = sdRBox(P.xy - outerC, outerB, rad);
   float bezelCov = (uFrame == 0 || !front) ? 0.0 : inside(dOuter);
 
-  if (uFrame == 1 && front) {
-    // ノートPCの蝶番とキーボード面（同じ平面の続きとして簡略化）
-    float yb = -0.5 - bot;
-    float hingeCov = inside(sdBox(P.xy - vec2(0.0, yb - 0.018), vec2(uA * 0.5 + side - 0.02, 0.018)));
-    vec2 deckB = vec2(uA * 0.5 + side + 0.12, 3.0);
-    float deckCov = inside(sdBox(P.xy - vec2(0.0, yb - 0.036 - 3.0), deckB));
-    float shade = clamp(1.0 + (P.y - yb) * 0.6, 0.55, 1.0);
-    col = mix(col, uDeckCol * uRoom * shade, deckCov);
-    col = mix(col, vec3(0.012) * uRoom, hingeCov);
+  // ---- 画面のまわり：カメラからの光線を、壁・机・キーボード面に当てて一番手前を取る
+  vec3 rdir = normalize(uCamR * q.x + uCamU * q.y + uCamF * uFcam);
+  vec3 glow = textureLod(uContent, vec2(0.5), 12.0).rgb * uBright * uTint;  // 画面全体の平均の光
+  float halfW = uA * 0.5 + side;
+  float yb = -0.5 - bot;                                       // 画面の枠の下端
+  float deskY = uFrame == 1 ? yb - 0.07 : (uFrame == 2 ? yb - 0.42 : -0.5 - 0.3);
+  float deckD = uA * 0.62;                                     // キーボード面の奥行き
+
+  float tWall = (-uWallDist - uCam.z) / min(rdir.z, -1e-4);
+  vec3 pw = uCam + rdir * tWall;
+  vec3 col = wallColor(pw.xy) * uRoom * mix(0.6, 1.15, vUv.y);  // 微分を使うので分岐の外で計算
+  float tBest = rdir.z < 0.0 ? tWall : 1e9;
+
+  if (rdir.y < 0.0) {
+    float tDesk = (deskY - uCam.y) / rdir.y;
+    vec3 pd = uCam + rdir * tDesk;
+    if (tDesk > 0.0 && tDesk < tBest && pd.z > -uWallDist) { tBest = tDesk; col = deskShade(pd, glow, halfW); }
+  }
+  if (uFrame == 1) {
+    if (rdir.y < 0.0) {
+      float tK = (yb - uCam.y) / rdir.y;
+      vec3 pk = uCam + rdir * tK;
+      if (tK > 0.0 && tK < tBest && abs(pk.x) < halfW && pk.z > 0.0 && pk.z < deckD) { tBest = tK; col = deckShade(pk.xz, glow); }
+    }
+    if (rdir.z < 0.0) {                                        // キーボード面の手前の側面
+      float tF = (deckD - uCam.z) / rdir.z;
+      vec3 pf = uCam + rdir * tF;
+      if (tF > 0.0 && tF < tBest && abs(pf.x) < halfW && pf.y < yb && pf.y > deskY) { tBest = tF; col = uDeckCol * uRoom * 0.55; }
+    }
+  } else if (uFrame == 2 && rdir.z < 0.0) {                    // モニターのスタンドの首
+    float tS = (-0.08 - uCam.z) / rdir.z;
+    vec3 ps = uCam + rdir * tS;
+    if (tS > 0.0 && tS < tBest && abs(ps.x) < 0.13 && ps.y < yb && ps.y > deskY) {
+      tBest = tS; col = uBezelCol * uRoom * (0.8 + 0.3 * smoothstep(0.13, 0.0, abs(ps.x)));
+    }
   }
 
   if (bezelCov > 0.0) {
@@ -288,10 +338,11 @@ uniform float uSeed;
 
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 
+// Dave Hoskins の hash12。前の簡易版は横に周期があって、暗い所に縦じまが出ていた
 float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 float vnoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);

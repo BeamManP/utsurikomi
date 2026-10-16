@@ -80,5 +80,5 @@ export function solveCamera(s, A) {
   const fx = dot(fc, r), fy = dot(fc, u), fz = dot(fc, f);
   const mirror = [(F * fx) / fz, (F * fy) / fz];
 
-  return { Hinv: inv3(H), HinvWall: inv3(Hwall), cam: C, D, F, mirror };
+  return { Hinv: inv3(H), HinvWall: inv3(Hwall), cam: C, D, F, mirror, basis: { r, u, f } };
 }

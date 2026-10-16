@@ -203,7 +203,12 @@ function render() {
     uBezelCol: bz.bezel,
     uDeckCol: bz.deck,
     uRoom: s.room,
-    uHinvWall: toColumnMajor(cam.HinvWall),
+    uCamR: cam.basis.r,
+    uCamU: cam.basis.u,
+    uCamF: cam.basis.f,
+    uFcam: cam.F,
+    uWallDist: s.wallDist,
+    uDeskCol: hexToRgb(s.deskCol),
     uWallPat: WALL_PATS.indexOf(s.wallPat),
     uWallCol: hexToRgb(s.wallCol),
     uWallCol2: hexToRgb(s.wallCol2),
@@ -377,7 +382,8 @@ const WALL_LOOKS = [
 ];
 function randomWall() {
   const [wallPat, wallCol, wallCol2] = pick(WALL_LOOKS);
-  return { wallPat, wallCol, wallCol2, wallScale: rnd(0.7, 1.4), wallDist: rnd(0.6, 2.2) };
+  const deskCol = pick(['#4a3a2e', '#7a5a3c', '#2a2a2e', '#d6d0c4', '#ffffff', '#5b6b5a']);
+  return { wallPat, wallCol, wallCol2, deskCol, wallScale: rnd(0.7, 1.4), wallDist: rnd(0.6, 2.2) };
 }
 
 $('#resetBtn').addEventListener('click', () => {
