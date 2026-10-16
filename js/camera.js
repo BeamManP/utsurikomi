@@ -50,19 +50,29 @@ export function solveCamera(s, A) {
     [u[0] * cr - r[0] * sr, u[1] * cr - r[1] * sr, u[2] * cr - r[2] * sr],
   ];
 
-  // 画面座標 (u,v,1) → 世界：P - C = M (u,v,1)
-  // 列 = dP/du, dP/dv, 定数項
-  const M = [
+  const R = [...r, ...u, ...f];
+  // 平面上の座標 (a,b,1) → 画像の同次座標。M は P - C = M (a,b,1) の行列（列 = dP/da, dP/db, 定数項）
+  const project = (M) => {
+    const RM = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      RM[i * 3 + j] = R[i * 3] * M[j] + R[i * 3 + 1] * M[3 + j] + R[i * 3 + 2] * M[6 + j];
+    }
+    return [F * RM[0], F * RM[1], F * RM[2], F * RM[3], F * RM[4], F * RM[5], RM[6], RM[7], RM[8]];
+  };
+
+  // 画面：画面座標 (u,v)（左上 0,0）
+  const H = project([
     A, 0, -A / 2 - C[0],
     0, -1, 0.5 - C[1],
     0, 0, -C[2],
-  ];
-  const R = [...r, ...u, ...f];
-  const RM = new Array(9);
-  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
-    RM[i * 3 + j] = R[i * 3] * M[j] + R[i * 3 + 1] * M[3 + j] + R[i * 3 + 2] * M[6 + j];
-  }
-  const H = [F * RM[0], F * RM[1], F * RM[2], F * RM[3], F * RM[4], F * RM[5], RM[6], RM[7], RM[8]];
+  ]);
+  // 壁：画面の wallDist 奥にある平行な面。座標は世界の (x, y) そのもの
+  const wd = s.wallDist ?? 1.2;
+  const Hwall = project([
+    1, 0, -C[0],
+    0, 1, -C[1],
+    0, 0, -wd - C[2],
+  ]);
 
   // 鏡に自分が写る点 ＝ カメラから画面へ下ろした垂線の足
   const foot = [C[0], C[1], 0];
@@ -70,5 +80,5 @@ export function solveCamera(s, A) {
   const fx = dot(fc, r), fy = dot(fc, u), fz = dot(fc, f);
   const mirror = [(F * fx) / fz, (F * fy) / fz];
 
-  return { Hinv: inv3(H), cam: C, D, F, mirror };
+  return { Hinv: inv3(H), HinvWall: inv3(Hwall), cam: C, D, F, mirror };
 }

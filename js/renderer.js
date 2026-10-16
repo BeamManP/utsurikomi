@@ -49,6 +49,9 @@ export class Renderer {
 
     this.contentTex = this.makeTex();
     this.reflTex = this.makeTex();
+    this.wallTex = this.makeTex();
+    this.hasWall = false;
+    this.wallAspect = 1;
     this.hasRefl = false;
     this.reflAspect = 16 / 9;
 
@@ -65,7 +68,7 @@ export class Renderer {
     return t;
   }
 
-  upload(tex, source) {
+  upload(tex, source, wrap) {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -74,8 +77,8 @@ export class Renderer {
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap || gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap || gl.CLAMP_TO_EDGE);
     if (this.aniso) {
       const max = gl.getParameter(this.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
       gl.texParameterf(gl.TEXTURE_2D, this.aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
@@ -89,6 +92,13 @@ export class Renderer {
     this.upload(this.reflTex, img);
     this.hasRefl = true;
     this.reflAspect = (img.naturalWidth || img.width) / (img.naturalHeight || img.height);
+  }
+
+  setWall(img) {
+    if (!img) { this.hasWall = false; return; }
+    this.upload(this.wallTex, img, this.gl.REPEAT);
+    this.hasWall = true;
+    this.wallAspect = (img.naturalWidth || img.width) / (img.naturalHeight || img.height);
   }
 
   resize(w, h) {
@@ -126,11 +136,16 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, this.reflTex);
     gl.uniform1i(S.loc.uRefl, 1);
     gl.uniform1i(S.loc.uHasRefl, this.hasRefl ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.wallTex);
+    gl.uniform1i(S.loc.uWallTex, 2);
+    gl.uniform1i(S.loc.uHasWallTex, this.hasWall ? 1 : 0);
+    gl.uniform1f(S.loc.uWallTexAspect, this.wallAspect);
     for (const [name, v] of Object.entries(u)) {
       const l = S.loc[name];
       if (l == null) continue;
-      if (name === 'uHinv') gl.uniformMatrix3fv(l, false, v);
-      else if (name === 'uFrame') gl.uniform1i(l, v);
+      if (name.startsWith('uHinv')) gl.uniformMatrix3fv(l, false, v);
+      else if (name === 'uFrame' || name === 'uWallPat') gl.uniform1i(l, v);
       else if (typeof v === 'number') gl.uniform1f(l, v);
       else if (v.length === 2) gl.uniform2fv(l, v);
       else if (v.length === 3) gl.uniform3fv(l, v);

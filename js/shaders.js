@@ -40,8 +40,18 @@ uniform int uFrame;           // 0 = 無し, 1 = ノートPC, 2 = モニター
 uniform vec4 uBezelM;         // 左右, 上, 下, 角丸
 uniform vec3 uBezelCol;
 uniform vec3 uDeckCol;
-uniform vec3 uBgCol;
 uniform float uRoom;          // 部屋の明るさ
+
+// 壁（画面より奥の平行な面）
+uniform mat3 uHinvWall;       // 画像座標 → 壁の世界座標 (x, y)
+uniform int uWallPat;         // 0 無地 1 ストライプ 2 レンガ 3 木 4 コンクリート 5 水玉 6 タイル 7 画像
+uniform vec3 uWallCol;
+uniform vec3 uWallCol2;
+uniform float uWallScale;
+uniform float uWallBlurW;     // ぼけの半径（世界の単位）
+uniform sampler2D uWallTex;
+uniform bool uHasWallTex;
+uniform float uWallTexAspect;
 
 // 写り込み
 uniform vec2 uReflCenter;
@@ -68,6 +78,79 @@ float inside(float d) {
   return 1.0 - smoothstep(-w, w, d);
 }
 
+float h21(vec2 p) {
+  p = fract(p * vec2(233.34, 851.73));
+  p += dot(p, p + 23.45);
+  return fract(p.x * p.y);
+}
+float vn(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 4; i++) { s += a * vn(p); p *= 2.03; a *= 0.5; }
+  return s;
+}
+
+// 壁の模様。p は「模様の大きさ」で割った世界座標（1 = 画面の高さ）
+vec3 wallPattern(vec2 p) {
+  vec3 a = uWallCol, b = uWallCol2;
+  if (uWallPat == 0) {                       // 無地（ビニールクロスの細かい凹凸）
+    return a * (0.96 + 0.08 * vn(p * 45.0));
+  } else if (uWallPat == 1) {                // ストライプ
+    return mix(a, b, step(0.5, fract(p.x * 2.0)));
+  } else if (uWallPat == 2) {                // レンガ（0.625 x 0.25・目地は b）
+    vec2 bp = p * vec2(1.6, 4.0);
+    bp.x += mod(floor(bp.y), 2.0) * 0.5;
+    vec2 f = fract(bp);
+    vec3 brick = a * (0.82 + 0.3 * h21(floor(bp))) * (0.9 + 0.15 * vn(p * 30.0));
+    float mortar = 1.0 - step(0.032, f.x) * step(0.08, f.y);
+    return mix(brick, b, mortar);
+  } else if (uWallPat == 3) {                // 縦張りの木の板
+    float x = p.x * 3.0;
+    float id = floor(x);
+    float grain = vn(vec2(x * 9.0, p.y * 0.7 + id * 7.0));
+    float rings = sin((p.y * 2.2 + grain * 3.0 + h21(vec2(id, 1.0)) * 10.0) * 6.0) * 0.5 + 0.5;
+    vec3 plank = mix(a, b, rings * 0.55 + 0.25 * h21(vec2(id, 3.0)));
+    float gap = smoothstep(0.0, 0.025, fract(x)) * smoothstep(0.0, 0.025, 1.0 - fract(x));
+    return plank * mix(0.4, 1.0, gap);
+  } else if (uWallPat == 4) {                // 打ちっぱなしのコンクリート（型枠の継ぎ目と穴）
+    vec3 c = mix(b, a, 0.55 + 0.45 * fbm(p * 5.0));
+    vec2 cell = vec2(1.8, 0.9);
+    vec2 g = (fract(p / cell) - 0.5) * cell;
+    vec2 h = (fract(p / (cell * 0.5) + 0.5) - 0.5) * cell * 0.5;
+    float hole = smoothstep(0.035, 0.025, length(h));
+    float seam = smoothstep(0.012, 0.0, min(abs(abs(g.x) - cell.x * 0.5), abs(abs(g.y) - cell.y * 0.5)));
+    return c * (1.0 - 0.45 * hole) * (1.0 - 0.25 * seam);
+  } else if (uWallPat == 5) {                // 水玉（互い違い）
+    vec2 q = p * 3.0;
+    q.x += 0.5 * mod(floor(q.y), 2.0);
+    return mix(a, b, smoothstep(0.21, 0.18, length(fract(q) - 0.5)));
+  } else if (uWallPat == 6) {                // タイル（目地は b）
+    vec2 f = fract(p * 2.5);
+    vec3 tile = a * (0.94 + 0.1 * h21(floor(p * 2.5)));
+    return mix(tile, b, 1.0 - step(0.045, f.x) * step(0.045, f.y));
+  }
+  if (!uHasWallTex) return a;                // 画像（縦 2 単位で 1 枚）
+  return texture(uWallTex, p * 0.5 / vec2(uWallTexAspect, 1.0)).rgb;
+}
+
+// ピントは画面に合っているので、壁はぼける。円の中を 12 点で平均する
+vec3 wallColor(vec2 wp) {
+  vec2 p = wp / uWallScale;
+  float rad = uWallBlurW / uWallScale + length(fwidth(p)) * 0.6;
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 12; i++) {
+    float fi = float(i) + 0.5;
+    float r = sqrt(fi / 12.0) * rad;
+    float ang = fi * 2.39996;
+    acc += wallPattern(p + r * vec2(cos(ang), sin(ang)));
+  }
+  return acc / 12.0;
+}
+
 void main() {
   vec2 qd = (vUv * 2.0 - 1.0) * uQScale;            // ゆがんだ後の画像座標
   float r2 = dot(qd, qd);
@@ -78,8 +161,10 @@ void main() {
   bool front = w.z > 0.0;
   vec3 P = vec3(uA * (uv.x - 0.5), 0.5 - uv.y, 0.0); // 画面の平面上の点
 
-  // ---- 背景（暗い部屋）
-  vec3 col = uBgCol * uRoom * mix(0.55, 1.15, vUv.y);
+  // ---- 背景（モニターの奥の壁）
+  vec3 ww = uHinvWall * vec3(q, 1.0);
+  vec2 wp = ww.xy / ww.z;
+  vec3 col = wallColor(wp) * uRoom * mix(0.6, 1.15, vUv.y);
 
   // ---- 枠
   float side = uBezelM.x, top = uBezelM.y, bot = uBezelM.z, rad = uBezelM.w;

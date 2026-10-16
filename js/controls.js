@@ -59,8 +59,18 @@ export const TABS = [
     items: [
       { key: 'frame', type: 'select', options: ['laptop', 'monitor', 'frameNone'], def: 'laptop' },
       { key: 'bezel', type: 'select', options: ['black', 'silver', 'white'], def: 'black' },
+    ],
+  },
+  {
+    id: 'wall',
+    items: [
+      { key: 'wallPat', type: 'select', options: ['plain', 'stripe', 'brick', 'wood', 'concrete', 'dots', 'tile', 'wallImage'], def: 'plain' },
+      { key: 'wallCol', type: 'color', def: '#d9d3c5' },
+      { key: 'wallCol2', type: 'color', def: '#a99f8c' },
+      { key: 'wallScale', min: 0.3, max: 3, step: 0.01, def: 1 },
+      { key: 'wallDist', min: 0.1, max: 4, step: 0.05, def: 1.2 },
+      { key: 'wallBlur', min: 0, max: 3, step: 0.01, def: 1 },
       { key: 'room', min: 0, max: 1, step: 0.01, def: 0.3 },
-      { key: 'bg', type: 'color', def: '#1c2436' },
     ],
   },
   {

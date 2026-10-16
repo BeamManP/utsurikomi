@@ -17,6 +17,8 @@ and a reflection of whoever is holding the phone. A tired dude? A monster? An al
   Everything runs in your browser. Images are never uploaded.
 - 写り込みのプリセット8種類＋自分の画像  
   8 reflection presets, or use your own image
+- モニターの奥の壁：無地・ストライプ・レンガ・木の板・コンクリート・水玉・タイル＋自分の画像。色も自由  
+  The wall behind the monitor: 7 patterns or your own image, any colors
 - 角度・寄り・レンズのゆがみ・モアレ・視野角・ノイズ・シャープなどを調整可能  
   Adjust angle, zoom, lens distortion, moiré, viewing-angle falloff, noise, sharpening and more
 - 日本語 / English

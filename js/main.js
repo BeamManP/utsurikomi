@@ -12,6 +12,7 @@ const canvas = $('#view');
 const stage = $('#stage');
 const fileInput = $('#file');
 const reflFileInput = $('#reflFile');
+const wallFileInput = $('#wallFile');
 const toast = $('#toast');
 
 let lang = detectLang();
@@ -19,6 +20,8 @@ const t = makeT(() => lang);
 let state = defaults();
 let userImage = null;
 let userRefl = null;          // 自分で読み込んだ写り込み
+let wallImage = null;         // 自分で読み込んだ壁紙
+let prevWallPat = null;
 let seed = Math.random() * 1000;
 let contentDirty = true;
 let currentTab = TABS[0].id;
@@ -113,6 +116,11 @@ function rebuild() {
 }
 
 function onChange(key) {
+  if (key === 'wallPat') {
+    // 「自分の画像」は、まだ無い時か、選ばれている所をもう一度押した時にファイルを選ばせる
+    if (state.wallPat === 'wallImage' && (!wallImage || prevWallPat === 'wallImage')) wallFileInput.click();
+    prevWallPat = state.wallPat;
+  }
   if (isContentKey(key)) contentDirty = true;
   requestRender();
 }
@@ -134,6 +142,8 @@ const hexToRgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
+
+const WALL_PATS = ['plain', 'stripe', 'brick', 'wood', 'concrete', 'dots', 'tile', 'wallImage'];
 
 const BEZEL = {
   black: { bezel: [0.03, 0.03, 0.035], deck: [0.05, 0.05, 0.055] },
@@ -193,8 +203,14 @@ function render() {
     uBezelM: MARGINS[s.frame],
     uBezelCol: bz.bezel,
     uDeckCol: bz.deck,
-    uBgCol: hexToRgb(s.bg),
     uRoom: s.room,
+    uHinvWall: toColumnMajor(cam.HinvWall),
+    uWallPat: WALL_PATS.indexOf(s.wallPat),
+    uWallCol: hexToRgb(s.wallCol),
+    uWallCol2: hexToRgb(s.wallCol2),
+    uWallScale: s.wallScale,
+    // ぼけの円は「画面との奥行きの差 ÷ 画面までの距離」に比例する
+    uWallBlurW: (s.wallBlur * 0.08 * s.wallDist) / cam.D,
     uReflCenter: reflCenter,
     uReflHalf: reflHalf,
     uReflFlip: s.reflFlip ? -1 : 1,
@@ -239,6 +255,21 @@ async function setReflFromFile(file) {
 
 fileInput.addEventListener('change', () => { setUserImageFromFile(fileInput.files[0]); fileInput.value = ''; });
 reflFileInput.addEventListener('change', () => { setReflFromFile(reflFileInput.files[0]); reflFileInput.value = ''; });
+wallFileInput.addEventListener('change', async () => {
+  const file = wallFileInput.files[0];
+  wallFileInput.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  try {
+    wallImage = await loadImage(URL.createObjectURL(file));
+    renderer.setWall(wallImage);
+    state.wallPat = 'wallImage';
+    prevWallPat = 'wallImage';
+    panel.sync();
+    requestRender();
+  } catch (_) {
+    showToast(t('msg.badImage'));
+  }
+});
 $('#openBtn').addEventListener('click', () => fileInput.click());
 
 ['dragenter', 'dragover'].forEach((ev) => document.addEventListener(ev, (e) => {
@@ -324,15 +355,33 @@ $('#randomBtn').addEventListener('click', () => {
     focus: rnd(0.2, 1.4),
     room: rnd(0.15, 0.5),
     noise: rnd(0.04, 0.14),
+    ...randomWall(),
   });
+  prevWallPat = state.wallPat;
   seed = Math.random() * 1000;
   panel.sync();
   document.querySelectorAll('.refl-item').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.refl === state.refl)));
   applyReflection();
 });
 
+// 部屋の壁らしい組み合わせ（地の色・模様の色）
+const WALL_LOOKS = [
+  ['plain', '#d9d3c5', '#a99f8c'], ['plain', '#e8e6e1', '#c0bcb2'], ['plain', '#9db4c8', '#6f8aa3'],
+  ['stripe', '#e4dccb', '#cbbd9f'], ['stripe', '#f1d7dc', '#e3b4be'],
+  ['brick', '#8e4a33', '#cfc6b8'], ['brick', '#e9e6df', '#bdb6aa'],
+  ['wood', '#a8774d', '#6e4a2c'], ['wood', '#d8bf98', '#a98b62'],
+  ['concrete', '#a7a6a2', '#77756f'],
+  ['dots', '#f4efe4', '#e7a7b4'], ['dots', '#24324a', '#d6c38a'],
+  ['tile', '#f2f2ef', '#b9b9b4'], ['tile', '#5f8f8a', '#d9dcd6'],
+];
+function randomWall() {
+  const [wallPat, wallCol, wallCol2] = pick(WALL_LOOKS);
+  return { wallPat, wallCol, wallCol2, wallScale: rnd(0.7, 1.4), wallDist: rnd(0.6, 2.2) };
+}
+
 $('#resetBtn').addEventListener('click', () => {
   state = defaults();
+  prevWallPat = state.wallPat;
   rebuild();
   applyReflection();
 });
